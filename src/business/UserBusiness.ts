@@ -3,12 +3,17 @@ import { GetUsersInput, GetUsersOutput, LoginInput, LoginOutput, SignupInput, Si
 import { BadRequestError } from "../errors/BadRequestError"
 import { NotFoundError } from "../errors/NotFoundError"
 import { User } from "../models/User"
+import { IdGenerator } from "../services/IdGenerator"
+import { TokenManager } from "../services/TokenManager"
+import { TokenPayload } from "../types"
 import { USER_ROLES } from "../types"
 
 export class UserBusiness {
     constructor(
-        private userDatabase: UserDatabase
-    ) {}
+        private userDatabase: UserDatabase,
+        private idGenerator: IdGenerator,
+        private tokenManager: TokenManager,
+    ) { }
 
     public getUsers = async (input: GetUsersInput): Promise<GetUsersOutput> => {
         const { q } = input
@@ -38,11 +43,12 @@ export class UserBusiness {
     }
 
     public signup = async (input: SignupInput): Promise<SignupOutput> => {
-        const { id, name, email, password } = input
+        //const { id, name, email, password } = input
+        const { name, email, password } = input
 
-        if (typeof id !== "string") {
-            throw new BadRequestError("'id' deve ser string")
-        }
+        // if (typeof id !== "string") {
+        //     throw new BadRequestError("'id' deve ser string")
+        // }
 
         if (typeof name !== "string") {
             throw new BadRequestError("'name' deve ser string")
@@ -56,11 +62,13 @@ export class UserBusiness {
             throw new BadRequestError("'password' deve ser string")
         }
 
-        const userDBExists = await this.userDatabase.findUserById(id)
+        // const userDBExists = await this.userDatabase.findUserById(id)
 
-        if (userDBExists) {
-            throw new BadRequestError("'id' já existe")
-        }
+        // if (userDBExists) {
+        //     throw new BadRequestError("'id' já existe")
+        // }
+
+        const id = this.idGenerator.generate()
 
         const newUser = new User(
             id,
@@ -74,9 +82,17 @@ export class UserBusiness {
         const newUserDB = newUser.toDBModel()
         await this.userDatabase.insertUser(newUserDB)
 
+        const payload: TokenPayload = {
+            id: newUser.getId(),
+            name: newUser.getName(),
+            role: newUser.getRole()
+        }
+
+        const token = this.tokenManager.createToken(payload)
+
         const output: SignupOutput = {
             message: "Cadastro realizado com sucesso",
-            token: "token"
+            token
         }
 
         return output
@@ -103,9 +119,26 @@ export class UserBusiness {
             throw new BadRequestError("'email' ou 'password' incorretos")
         }
 
-        const output: LoginOutput = {
+        const user = new User(
+            userDB.id,
+            userDB.name,
+            userDB.email,
+            userDB.password,
+            userDB.role,
+            userDB.created_at
+        )
+
+        const payload: TokenPayload = {
+            id: user.getId(),
+            name: user.getName(),
+            role: user.getRole()
+        }
+
+        const token = this.tokenManager.createToken(payload)
+
+        const output: SignupOutput = {
             message: "Login realizado com sucesso",
-            token: "token"
+            token
         }
 
         return output
